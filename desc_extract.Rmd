@@ -1,0 +1,199 @@
+---
+title: "desc_extract"
+author: "Sander van der Zeeuw"
+date: "November 1, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(dplyr)
+require(tidyr)
+require(reshape)
+require('RAdwords')
+```
+
+```{r do_auth}
+google_auth <- doAuth()
+```
+
+```{r create_body}
+# Create body for pulling in data from particular campaigns.
+body <- statement(select=c('CampaignId','CampaignName','AdGroupName','AdGroupStatus','Clicks','Cost','Impressions','Conversions','ConversionValue','Ctr','AdType','Labels','LabelIds','Description','HeadlinePart1','HeadlinePart2', 'Device'),#'Date'),
+report="AD_PERFORMANCE_REPORT",
+where = c("CampaignName = 'SKAG' AND AdType IN ['EXPANDED_TEXT_AD']"),
+start="20160701",
+end="20161031")
+```
+
+```{r load_data_and_write_raw_data_to_file}
+data <- getData(clientCustomerId='728-360-0929', google_auth=google_auth ,statement=body)
+write.table(data, file = "SKAG_table.tsv", sep = "\t", fileEncoding = "UTF-16LE", row.names = F, quote = F)
+
+#sort(table(unlist(strsplit(unique(data$Description)," "))))
+#unlist(strsplit(unique(data$Headline1), " "))
+#unlist(strsplit(unique(data$Headline2), " "))
+
+#Reduce(intersect, list(unlist(strsplit(unique(data$Headline1), " ")),unlist(strsplit(unique(data$Headline2), " "))))
+
+data2 <- data
+
+#data2$LabelIDs <- gsub("\\[|\\]","", data2$LabelIDs)
+#data2_melt <- melt(data2)
+#tst <- cast(data2_melt, LabelIDs1 ~ variable , subset = variable=='ConversionValue')
+```
+
+```{r find common words to identify themes}
+#l <- as.list(unique(data2$Headline1))
+#lst <- sapply(l, function(x) strsplit(x, " "))
+#table(gsub( "\\?", "",unlist(lst)))
+
+check_common_words <- function(data){
+  print(unique(data))
+  l <- as.list(unique(data))
+  lst <- sapply(l, function(x) strsplit(x, " "))
+  print(table(gsub( "\\?", "",unlist(lst))))
+  print(unique(unlist(lst)))
+}
+
+check_common_words(data2$Headline1)
+check_common_words(data2$Headline2)
+check_common_words(data2$Description)
+
+# Headline1: Nodig Kopen Nieuwste/nieuwe Bedrukken Outlet Year
+# Headline2: Morgen_Veld Morgen_Huis Koop_voor_<tijd> Alle_Maten Personaliseer Altijd_Gratis_verzending Maat_niet_goed Ontdek
+# Description:
+```
+
+```{r convert themes to IDs}
+#grep("Nodig|Kopen|Nieuwste|nieuwe|Bedrukken|Outlet|[2][0][1][6:7]|Naam",x)
+
+
+check_theme <- function(data, theme){
+  sapply(data, function(x){
+    if(grepl(theme, x) == T){
+      print(paste0('%',theme,'%'))
+    }else{
+      print(NA)
+    }
+  })}
+
+data2_tst <- data2
+data2_tst$Theme1 <- as.character(check_theme(data2$Headline1, "Bedrukken"))
+data2_tst$Theme2 <- as.character(check_theme(data2$Headline1, "Nieuwste|Nieuwe|201[6:7]"))
+data2_tst$Theme3 <- as.character(check_theme(data2$Headline1, "Nodig"))
+data2_tst$Theme4 <- as.character(check_theme(data2$Headline1, "Kopen"))
+data2_tst$Theme5 <- as.character(check_theme(data2$Headline1, "Outlet"))
+data2_tst$Theme6 <- as.character(check_theme(data2$Headline1, "Naam"))
+
+dat <- data2_tst[18:23]
+dat <- dat[cbind(1:nrow(dat), max.col(!is.na(dat)))]
+data2$theme1 <- dat
+data2$theme1_id <- as.numeric(factor(as.vector(data2$theme1)))
+
+# Headline2: Morgen_Veld Morgen_Huis Koop_voor_<tijd> Alle_Maten Personaliseer Altijd_Gratis_verzending Maat_niet_goed Ontdek
+data2_tst$Theme_hl2_1 <- as.character(check_theme(data2$Headline2, "NU Besteld"))
+data2_tst$Theme_hl2_2 <- as.character(check_theme(data2$Headline2, "Bestel NU"))
+data2_tst$Theme_hl2_3 <- as.character(check_theme(data2$Headline2, "(Koop voor)*23"))
+data2_tst$Theme_hl2_4 <- as.character(check_theme(data2$Headline2, "Alle Maten"))
+data2_tst$Theme_hl2_5 <- as.character(check_theme(data2$Headline2, "Personaliseer"))
+data2_tst$Theme_hl2_6 <- as.character(check_theme(data2$Headline2, "Altijd Gratis"))
+data2_tst$Theme_hl2_7 <- as.character(check_theme(data2$Headline2, "Maat niet Goed"))
+data2_tst$Theme_hl2_8 <- as.character(check_theme(data2$Headline2, "Ontdek|Nieuwe"))
+
+dat <- data2_tst[24:31]
+dat <- dat[cbind(1:nrow(dat), max.col(!is.na(dat)))]
+data2$theme2 <- dat
+data2$theme2_id <- as.numeric(factor(as.vector(data2$theme2)))
+
+# De Grootste Collectie Voetbalschoenen van NL.Personaliseer Je Voetbalschoenen!
+# De Grootste Voetbal Webshop van NL.Ruim Assortiment, Scherpe Prijzen!
+# Voetbalschoenen van alle merken, ook in grote en kleine Maten. Alles op voorraad
+# Winnaar thuiswinkel award voor beste klantenservice. Gratis verzending & retour
+# Grootste voetbalcollectie van Nederland. Alles direct uit voorraad leverbaar!
+# Al meer dan 1 miljoen tevreden klanten. Ontdek de mooiste collectie van ons land
+# Meer dan 1000 voetbalschoenen, altijd op voorraad! Scherpe Prijzen.Bestel Nu!
+
+data2_tst$Description_1 <- as.character(check_theme(data2$Description, "Personaliseer"))
+data2_tst$Description_2 <- as.character(check_theme(data2$Description, "Webshop"))
+data2_tst$Description_3 <- as.character(check_theme(data2$Description, "Merken|Maten"))
+data2_tst$Description_4 <- as.character(check_theme(data2$Description, "Winnaar|award"))
+data2_tst$Description_5 <- as.character(check_theme(data2$Description, "Direct"))
+data2_tst$Description_6 <- as.character(check_theme(data2$Description, "Al Meer|klanten"))
+data2_tst$Description_7 <- as.character(check_theme(data2$Description, "Scherpe Prijzen"))
+
+dat <- data2_tst[32:38]
+dat <- dat[cbind(1:nrow(dat), max.col(!is.na(dat)))]
+data2$theme_Description <- dat
+data2$Description_id <- as.numeric(factor(as.vector(data2$theme_Description)))
+data2$full_ad <- paste0(data2$theme1_id, "-", data2$theme2_id, "-",data2$Description_id)
+```
+
+```{r Estimate a winner}
+#data2 %>%
+#  separate(LabelIDs, paste0('LabelIDs',rep(1:4,1)), ",") -> data3
+
+data3_summarise <- summarise(group_by(data2, theme1, Device), sum(ConversionValue), sum(Impressions), sum(Clicks),mean(CTR))
+data3_summarise$'conv/impressions' <- data3_summarise$`sum(ConversionValue)`/data3_summarise$`sum(Impressions)`
+
+data.frame(
+  row.names = paste0(data3_summarise[1:2,]$theme1,"-",data3_summarise[1:2,]$Device),
+  Impressions = data3_summarise[1:2,]$`sum(Impressions)`,
+  Clicks = data3_summarise[1:2,]$`sum(Clicks)`)
+
+testSignificancy <- function(i,j){
+  chisq.test(data.frame(
+  row.names = paste0(data3_summarise[i:j,]$theme1,"-",data3_summarise[i:j,]$Device),
+  Impressions = data3_summarise[i:j,]$`sum(Impressions)`,
+  Clicks = data3_summarise[i:j,]$`sum(Clicks)`))}
+
+testSignificancy(1,2)
+
+lapply(data3_summarise, function(i){
+  print(i)
+})
+
+
+
+
+#idx <- match(data3_summarise$theme1_id, data2$theme1_id)
+#data3_summarise$theme1 <- data2$theme1[idx]
+#data3_summarise <- data3_summarise[6,1,2,3,4,5]
+
+
+data2 %>%
+   group_by(theme1, theme2, Device) %>%
+   summarise(ConversionValue = sum(ConversionValue), Impressions = sum(Impressions)) ->
+   data4_theme1_theme2
+
+data4_theme1_theme2$'conv/impressions' <- data4_theme1_theme2$'ConversionValue'/data4_theme1_theme2$'Impressions'
+
+data2 %>%
+   group_by(theme1, theme2, theme_Description) %>%
+   summarise(ConversionValue = sum(ConversionValue), Impressions = sum(Impressions)) ->
+   data5_th1_th2_desc
+
+data5_th1_th2_desc$'conv/impressions' <- data5_th1_th2_desc$'ConversionValue' / data5_th1_th2_desc$'Impressions'
+#merge_themes <- data.frame(mycol = na.omit(unlist(data2_tst[18:23])), stringsAsFactors = F)
+#data_themes <- cbind(data2,themes = merge_themes$mycol)
+
+#data2_merge_themes <- data2_tst[18:23] %>% 
+#    gather("theme", "theme_merged", 1:5) %>%
+#    #filter(!is.na(theme_merged)) %>% 
+#    select(theme_merged)
+
+
+#data3_melt <- melt(data3, 'LabelIDs1')
+#data_ID1 <- recast(data3_melt, LabelIDs1 ~ . , fun.aggregate = sum)
+
+
+data3 %>%
+  group_by(LabelIDs1) -> data4
+#data2 <- data[!duplicated(data $LabelIDs),]
+
+
+
+
+```
+
+

@@ -1,0 +1,159 @@
+---
+title: "connect_to_postgrsqlDB"
+author: "Sander van der Zeeuw"
+date: "November 10, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require("RPostgreSQL")
+```
+
+```{r connect DB}
+# create a connection
+# save the password that we can "hide" it as best as we can by collapsing it
+pw <- {
+  "adm!RM02!"
+}
+drv <- dbDriver("PostgreSQL")
+
+con <- dbConnect(drv, dbname = "footballshop",
+                 host = "10.8.0.1", port = 5432,
+                 user = "jackarian", password = pw)
+rm(pw)
+
+dbExistsTable(con, "prodotti_servizi")
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r join_tables}
+#df_postgres <- dbGetQuery(con, "SELECT * FROM shopmanager_edi_item_prod edi join prodotti_servizi ps on edi.ean = ps.ean join customer_life_time_value clv on edi.debnumber = clv.debtorcode and  edi.transaction_id= clv.increment_id WHERE created_at > '2015-01-01' AND debtorcode = '293543'")
+
+query <- "SELECT
+ edi.debnumber,  edi.transaction_id, edi.sku, edi.ean, edi.size,
+ edi.name, edi.total_qty, edi.price_incl_vat, edi.stock_price, edi.price_excl_vat,
+ edi.total_margin, edi.single_margin, edi.stock_price_eur, edi.price_excl_vat_euro,
+ edi.price_incl_vat_euro, edi.total_margin_eur, edi.single_margin_eur_perc, edi.total_margin_eur_perc,
+ edi.order_date, edi.personalized, edi.price_plus_personalization, edi.personalization_amount, edi.vat_value,
+ ps.descrizione, ps.product_brand_code, ps.live, ps.noos, ps.brand_value, ps.club_land_value, ps.kleur_value,
+ ps.maat_value, ps.type__value, ps.speler_value, ps.productsoort_value, ps.collectie_value, ps.competitie_value,
+ ps.doelgroep_value, ps.magento_configured, clv.email, clv.is_new,
+ EXTRACT(WEEK from edi.order_date) as weekNr,
+ EXTRACT(YEAR from  edi.order_date) as yearNr
+ 
+FROM shopmanager_edi_item_prod edi join prodotti_servizi ps on edi.ean = ps.ean join customer_life_time_value clv on edi.debnumber = clv.debtorcode 
+and  edi.transaction_id= clv.increment_id
+
+WHERE debtorcode = '293543' AND edi.order_date > '2015-01-01' AND productsoort_value = 'Voetbalschoenen'"
+
+
+df_postgres <- dbGetQuery(con, query)
+
+save(df_postgres, file = "voetbalschoenenQuery_2015.Rdata")
+load("voetbalschoenenQuery_2015.Rdata")
+#df_postgres <- df_postgres[df_postgres$order_date>"2015-01-01",]
+
+
+df_postgres <- unique(df_postgres)
+df_postgres <- df_postgres[colSums(!is.na(df_postgres)) > 0]
+#df_postgres <- df_postgres[rowSums(!is.na(df_postgres)) > 0,]
+
+#df_postgres <- df_postgres[df_postgres$productsoort_value == "Voetbalschoenen",]
+df_postgres <- df_postgres[df_postgres$doelgroep_value == "Volwassenen",]
+
+df_postgres <- df_postgres[!(rowSums(is.na(df_postgres))==NCOL(df_postgres)),]
+df_postgres$week_year <- paste0(df_postgres$weeknr, "-",df_postgres$yearnr)
+
+library(dplyr)
+
+#df_postgres %>% 
+#  group_by(email) %>% 
+#  summarise(sum(price_excl_vat_euro), order_date = list(as.character(order_date)), #sum(total_qty)) -> summarise_emails
+
+
+#df_postgres %>% 
+# group_by(email, order_date) %>%
+#  summarise(sum(price_excl_vat_euro), sum(total_qty)) -> #summarise_emails#days=c(max(order_date)-min(order_date))) -> summarise_emails
+
+library(tidyverse)
+#summarise_emails %>% 
+#  arrange(email, order_date, `sum(price_excl_vat_euro)`, `sum(total_qty)` ) %>% 
+#  group_by(email) %>% 
+#  transmute(order_date, date=paste0("date", 1:n())) %>% 
+#  spread(date, order_date) -> split_orders
+
+
+df_postgres %>% 
+  arrange(email, order_date) %>% 
+  group_by(email) %>% 
+  mutate(order_date, date=paste0("date", 1:n())) %>% 
+  spread(date, order_date) -> split_orders
+
+split_orders <- split_orders[!(rowSums(is.na(split_orders))==NCOL(split_orders)),]
+
+df <- data.frame(t_id = split_orders$transaction_id, date1 = split_orders$date1, date2 = split_orders$date2,date3=split_orders$date3, email = split_orders$email)
+
+
+
+
+coalesce <- function(...) {
+  apply(cbind(...), 1, function(x) x[which(!is.na(x))[1]])
+}
+
+library(reshape)
+library(reshape2)
+is.date <- grepl("date", names(split_orders))
+k <- sum(is.date)
+
+long <- do.call("rbind", 
+  by(split_orders, split_orders$email, function(x)
+    data.frame(email = x$email[1], 
+       time = 1:k,
+       t_id = c(x$transaction_id,  rep(NA, k))[1:k],
+       date = c(na.omit(do.call("c", x[is.date])), rep(NA, k))[1:k]
+    )
+  )
+)
+onerow_per_customer <- reshape(long, dir = "wide", idvar = "email")
+
+
+
+
+
+
+
+
+
+
+
+
+
+library(data.table)
+tst <- setDT(tstDF)[, lapply(.SD, function(x) toString(na.omit(x))), by = t_id]
+
+
+
+#summarise_emails <- summarise(group_by(df_postgres, email), order_date = list(as.character(order_date)), sum(price_excl_vat_euro))
+
+summarise_emails$order_date <- as.character(summarise_emails$order_date)
+summarise_emails$order_date <- gsub("[c|(|)|\\|\"]","",summarise_emails$order_date)
+#summarise_emails <- summarise_emails[order(summarise_emails$order_date),]
+
+
+
+#summarise_emails_multipleOrders <- summarise_emails[grep(",", summarise_emails$order_date]
+
+#function(df) {
+#    combos <- combn(tail(names(df), -1), 2)
+#    diffs <- apply(combos, 2, function(x) {
+#        difftime(df[,x[2]], df[,x[1]], units="days")
+#    })
+#    colnames(diffs) <- paste0(combos[1,], "_TO_", combos[2,])
+#    colMeans(diffs, na.rm=TRUE)
+#}
+
+```

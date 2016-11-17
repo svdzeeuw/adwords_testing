@@ -1,0 +1,80 @@
+---
+output: 
+  html_document: 
+    keep_md: yes
+    theme: cosmo
+    toc: yes
+---
+```{r load DB, echo=FALSE}
+require("RPostgreSQL")
+library(DT)
+# create a connection
+# save the password that we can "hide" it as best as we can by collapsing it
+pw <- {
+  "adm!RM02!"
+}
+drv <- dbDriver("PostgreSQL")
+
+con <- dbConnect(drv, dbname = "footballshop",
+                 host = "10.8.0.1", port = 5432,
+                 user = "jackarian", password = pw)
+rm(pw)
+
+dbExistsTable(con, "prodotti_servizi")
+
+```
+
+```{r LoadQuery}
+query <- "SELECT *
+  FROM shopmanager_order_prod 
+
+  where debnumber ='293543' and to_recheck ='f'
+
+and order_date between '2016-10-01' and '2016-10-31'
+
+order by magento_status desc"
+
+
+df_postgres <- dbGetQuery(con, query)
+```
+
+
+```{r check data}
+magento <- read.csv(file = "magento october.csv", sep = ",", h = T, stringsAsFactors = F)
+
+magento2 <- magento[!magento$Status == "Canceled",]
+
+trim <- function (x) gsub("^\\s+|\\s+$", "", x)
+df_postgres$magento_status <- trim(df_postgres$magento_status)
+
+df_postgres <- unique(df_postgres)
+magento2 <- unique(magento2)
+
+idx <- magento2$Bestelnr. %in% df_postgres$transaction_id
+only_magento <- magento2[!idx,]
+
+idx <- df_postgres$transaction_id %in% magento2$Bestelnr.
+only_postgres <- df_postgres[!idx,] 
+
+
+
+```
+
+```{r load second table}
+datatable(only_magento, options = list(
+    dom = 'Bfrtip', buttons = c('copy','csv', 'excel', 'pdf', 'print', 'colvis')
+  ),
+  extensions = 'Buttons',
+  filter = 'bottom'
+)
+```
+
+```{r show second table}
+datatable(only_postgres, options = list(
+  dom = 'Bfrtip', buttons = c('copy', 'csv', 'excel', 'pdf', 'print', 'colvis')
+  ),
+  extensions = 'Buttons',
+  filter = 'bottom'
+)
+```
+

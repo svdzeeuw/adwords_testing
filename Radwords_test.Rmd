@@ -1,0 +1,41 @@
+---
+title: "connect_adwords"
+author: "Sander van der Zeeuw"
+date: "November 1, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load_Radwords}
+require('RAdwords')
+```
+
+```{r do_auth}
+google_auth <- doAuth()
+```
+
+```{r create_body}
+# Create body for pulling in data from particular campaigns.
+body <- statement(select=c('RegionCriteriaId','Impressions','Clicks','Conversions',
+                           'ConversionValue','Cost', 'CountryCriteriaId', 'CampaignId','CampaignName'),
+report="GEO_PERFORMANCE_REPORT",
+where = c("CountryCriteriaId = '2528' AND CampaignId IN ['286354323','286354443','286354083','286354203']"),
+start="20161001",
+end="20161031")
+```
+
+```{r load_data}
+#make sure to use the Adwords Account Id (MCC Id will not work)
+data <- getData(clientCustomerId='728-360-0929', google_auth=google_auth ,statement=body)
+country.info <- read.csv('country_ids.csv')
+
+idx <- match(data[,"Region"], country.info$Criteria.ID)
+data$RegionName <- as.character(country.info$Name[idx])
+idx <- which(is.na(data$RegionName))
+data$RegionName[idx]<- 'Unknown'
+```
+
+
