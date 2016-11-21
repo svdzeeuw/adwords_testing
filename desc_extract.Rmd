@@ -10,7 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 require(dplyr)
 require(tidyr)
 require(reshape)
-require('RAdwords')
+require(RAdwords)
 ```
 
 ```{r do_auth}
