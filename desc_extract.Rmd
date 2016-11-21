@@ -22,8 +22,8 @@ google_auth <- doAuth()
 body <- statement(select=c('CampaignId','CampaignName','AdGroupName','AdGroupStatus','Clicks','Cost','Impressions','Conversions','ConversionValue','Ctr','AdType','Labels','LabelIds','Description','HeadlinePart1','HeadlinePart2', 'Device'),#'Date'),
 report="AD_PERFORMANCE_REPORT",
 where = c("CampaignName = 'SKAG' AND AdType IN ['EXPANDED_TEXT_AD']"),
-start="20160701",
-end="20161031")
+start="20161020",
+end="20161118")
 ```
 
 ```{r load_data_and_write_raw_data_to_file}

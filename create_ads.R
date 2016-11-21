@@ -8,6 +8,8 @@
 
 library(dplyr)
 #Data2 can be produced with desc_extract.Rmd
+
+data2 <- data2[data2$Adgroup %in% 'Voetbalschoenen',]
 hl1 <- summarise(group_by(data2, theme1), sum(ConversionValue), sum(Impressions), sum(Clicks),mean(CTR))
 hl1$'conv/impressions' <- hl1$`sum(ConversionValue)`/hl1$`sum(Impressions)`
 
@@ -16,6 +18,11 @@ hl2$'conv/impressions' <- hl2$`sum(ConversionValue)`/hl2$`sum(Impressions)`
 
 desc <- summarise(group_by(data2, theme_Description), sum(ConversionValue), sum(Impressions), sum(Clicks),mean(CTR))
 desc$'conv/impressions' <- desc$`sum(ConversionValue)`/desc$`sum(Impressions)`
+
+all_combo <- summarise(group_by(data2, theme1, theme2,theme_Description),
+                       sum(ConversionValue), sum(Impressions), sum(Clicks),mean(CTR))
+all_combo$'conv/impressions' <- all_combo$`sum(ConversionValue)`/all_combo$`sum(Impressions)`
+
 
 campaign_name <- "SKAG"
 AD_group <- c("Voetbalschoenen")
